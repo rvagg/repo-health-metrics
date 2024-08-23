@@ -1,0 +1,13 @@
+{
+  "name": "repo-health-metrics",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Rod Vagg <rod@vagg.org>",
+  "license": "Apache-2.0",
+  "description": "Collect various GitHub repository health metrics from the GitHub API"
+}
