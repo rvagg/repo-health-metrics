@@ -6,6 +6,9 @@ if (!GITHUB_TOKEN) {
   throw new Error('GITHUB_TOKEN environment variable is required')
 }
 
+// Add webhook URL from Slack workflow
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+
 const MONITOR_QUERY = `
 query($cursor: String, $owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
@@ -91,6 +94,53 @@ async function fetchRepoMetrics(repo) {
   return prs
 }
 
+async function triggerSlackWorkflow(prs, repo) {
+  if (!SLACK_WEBHOOK_URL) return;
+
+  try {
+    let message = `*FilOz Metrics - ${repo.org}/${repo.repo}*\n\n`;
+
+    if (prs.length > 0) {
+      // Create table header
+      message += '```' + 
+        'PR #'.padEnd(8) + ' | ' +
+        'Created'.padEnd(10) + ' | ' +
+        'Title'.padEnd(50) +
+        '```\n';
+
+      // Add PRs
+      prs.forEach(pr => {
+        const prNumber = `#${pr._url.split('/').pop()}`;
+        message += '```' + 
+          `• <${pr._url}|${prNumber.padEnd(6)}> | ` +
+          `${pr.created.padEnd(10)} | ` +
+          `${pr.title.substring(0, 48).padEnd(50)}` +
+          '```\n';
+      });
+    } else {
+      message += '🎉 No open pull requests found!';
+    }
+
+    const payload = {
+      blocks: message
+    };
+
+    const response = await fetch(SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook error: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Error triggering Slack workflow:', error);
+  }
+}
+
 async function main() {
   console.log(`Monitoring PRs for ${repos.length} repositories...`)
 
@@ -98,6 +148,7 @@ async function main() {
     try {
       const prs = await fetchRepoMetrics(repo)
       
+      // Console output
       console.log(`\n${prs.length} Pull Requests for ${repo.org}/${repo.repo}:`)
       if (prs.length > 0) {
         const tableData = prs.reduce((acc, pr) => {
@@ -108,10 +159,14 @@ async function main() {
           }
           return acc
         }, {})
-        
         console.table(tableData)
       } else {
         console.table([])
+      }
+
+      // Slack output
+      if (SLACK_WEBHOOK_URL) {
+        await triggerSlackWorkflow(prs, repo);
       }
     } catch (error) {
       console.error(`Error fetching PRs for ${repo.org}/${repo.repo}:`, error)
