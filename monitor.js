@@ -98,27 +98,27 @@ async function triggerSlackWorkflow(prs, repo) {
   if (!SLACK_WEBHOOK_URL) return;
 
   try {
-    let message = `*FilOz Metrics - ${repo.org}/${repo.repo}*\n\n`;
+    let message = `*FilOz Metrics - ${repo.org}/${repo.repo}*\n`;
 
     if (prs.length > 0) {
       // Create table header
-      message += '```' + 
+      message += '```\n' + 
         'PR #'.padEnd(8) + ' | ' +
         'Created'.padEnd(10) + ' | ' +
         'Title'.padEnd(50) +
-        '```\n';
+        '\n';
 
       // Add PRs
       prs.forEach(pr => {
         const prNumber = `#${pr._url.split('/').pop()}`;
-        message += '```' + 
+        message += 
           `• <${pr._url}|${prNumber.padEnd(6)}> | ` +
           `${pr.created.padEnd(10)} | ` +
-          `${pr.title.substring(0, 48).padEnd(50)}` +
-          '```\n';
+          `${pr.title.substring(0, 48).padEnd(50)}\n`;
       });
+      message += '```';
     } else {
-      message += '🎉 No open pull requests found!';
+      message += '\n🎉 No open pull requests found!';
     }
 
     const payload = {
