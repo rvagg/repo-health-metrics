@@ -23,6 +23,7 @@ const userActivityGraphql = `
               number
               repository { nameWithOwner }
               createdAt
+              updatedAt
               mergedAt
               closedAt
               isDraft
@@ -43,6 +44,7 @@ const userActivityGraphql = `
           nodes {
             pullRequestReview {
               createdAt
+              updatedAt
               state
               comments { totalCount }
               repository { nameWithOwner }
@@ -71,6 +73,7 @@ const userActivityGraphql = `
               number 
               repository { nameWithOwner }
               createdAt
+              updatedAt
               closedAt
               comments { totalCount }
             }
@@ -95,6 +98,10 @@ async function fetchUserActivity(login, since) {
   let hasNextPage = true
   let cursor = null
 
+  // Calculate the date a month prior to the specified date
+  const from = new Date(since)
+  from.setMonth(from.getMonth() - 1)
+
   while (hasNextPage) {
     const response = await fetch('https://api.github.com/graphql', {
       method: 'POST',
@@ -106,7 +113,7 @@ async function fetchUserActivity(login, since) {
       },
       body: JSON.stringify({
         query: userActivityGraphql,
-        variables: { cursor, login, since },
+        variables: { cursor, login, since: from.toISOString() },
       }),
     })
 
@@ -137,6 +144,11 @@ async function fetchUserActivity(login, since) {
     cursor = pageInfo.endCursor
   }
 
+  // Filter contributions to include only those updated since the specified date
+  activity.pullRequests = activity.pullRequests.filter(pr => new Date(pr.updatedAt) >= since)
+  activity.reviews = activity.reviews.filter(review => new Date(review.updatedAt) >= since)
+  activity.issues = activity.issues.filter(issue => new Date(issue.updatedAt) >= since)
+
   return activity
 }
 
@@ -166,7 +178,24 @@ function printActivity(activity) {
     ['Created', 'State', 'Title', 'Merged', 'Comments/Reviews', 'Changes']
   )
 
-  console.log("\n=== Reviews on Others' PRs ===")
+  console.log('\n## Issues')
+  console.table(
+    issues
+      .map((issue) => ({
+        Title: shorten(issue.title, 50),
+        Created: new Date(issue.createdAt).toLocaleDateString(),
+        Closed: issue.closedAt ? new Date(issue.closedAt).toLocaleDateString() : '-',
+        Comments: issue.comments.totalCount,
+        Issue: `https://github.com/${issue.repository.nameWithOwner}/issues/${issue.number}`,
+      }))
+      .reduce((acc, issue) => {
+        acc[issue.Issue] = issue
+        return acc
+      }, {}),
+    ['Created', 'Title', 'Closed', 'Comments']
+  )
+
+  console.log("\n## Reviews")
   console.table(
     reviews
       .filter((review) => review.pullRequest.author.login !== process.argv[2])
@@ -183,23 +212,6 @@ function printActivity(activity) {
         return acc
       }, {}),
     ['Date', 'State', 'Title', 'Author']
-  )
-
-  console.log('\n## Issues')
-  console.table(
-    issues
-      .map((issue) => ({
-        Title: shorten(issue.title, 50),
-        Created: new Date(issue.createdAt).toLocaleDateString(),
-        Closed: issue.closedAt ? new Date(issue.closedAt).toLocaleDateString() : '-',
-        Comments: issue.comments.totalCount,
-        Issue: `https://github.com/${issue.repository.nameWithOwner}/issues/${issue.number}`,
-      }))
-      .reduce((acc, issue) => {
-        acc[issue.Issue] = issue
-        return acc
-      }, {}),
-    ['Title', 'Created', 'Closed', 'Comments']
   )
 
   console.log('\n## Commits by Repository')
@@ -232,7 +244,7 @@ async function main() {
     process.exit(1)
   }
 
-  const activity = await fetchUserActivity(login, since.toISOString())
+  const activity = await fetchUserActivity(login, since)
   console.log(`# Activity for @${login} since ${since.toLocaleDateString()}`)
   printActivity(activity)
 }
