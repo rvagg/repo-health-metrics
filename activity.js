@@ -156,66 +156,79 @@ function shorten(str, maxLength) {
   return str.length > maxLength ? str.slice(0, maxLength) + '…' : str
 }
 
-function printActivity(activity) {
+function printActivity(activity, htmlOutput = false) {
+  const shortenChars = htmlOutput ? Infinity : 50
   const { pullRequests, reviews, issues, commitsByRepo } = activity
 
-  console.log('\n## Pull Requests')
-  console.table(
-    pullRequests
-      .map((pr) => ({
-        State: pr.state,
-        Title: shorten(pr.title, 50),
-        Created: new Date(pr.createdAt).toLocaleDateString(),
-        Merged: pr.mergedAt ? new Date(pr.mergedAt).toLocaleDateString() : '-',
-        'Comments/Reviews': `${pr.comments.totalCount}/${pr.reviews.totalCount}`,
-        Changes: `+${pr.additions}/-${pr.deletions}`,
-        PR: `https://github.com/${pr.repository.nameWithOwner}/pull/${pr.number}`,
-      }))
-      .reduce((acc, pr) => {
-        acc[pr.PR] = pr
-        return acc
-      }, {}),
-    ['Created', 'State', 'Title', 'Merged', 'Comments/Reviews', 'Changes']
+  const log = htmlOutput ? (str) => console.log(str) : (str) => console.log(str)
+  const table = htmlOutput
+    ? (headers, data) => {
+        log('<table>')
+        log('<thead><tr>')
+        headers.forEach((header) => log(`<th>${header}</th>`))
+        log('</tr></thead>')
+        log('<tbody>')
+        data.forEach((row) => {
+          log('<tr>')
+          headers.forEach((header) => log(`<td>${row[header] || ''}</td>`))
+          log('</tr>')
+        })
+        log('</tbody>')
+        log('</table>')
+      }
+    : (headers, data) => console.table(data.reduce((acc, item) => {
+        const key = Object.values(item)[0];
+        acc[key] = item;
+        return acc;
+      }, {}), headers);
+
+  const heading = htmlOutput ? (str) => log(`<h3>${str}</h3>`) : (str) => console.log(`\n## ${str}`)
+
+  heading('Pull Requests')
+  table(
+    ['Created', 'State', 'Title', 'Merged', 'Comments/Reviews', 'Changes'].concat(htmlOutput ? [] : ['PR']),
+    pullRequests.map((pr) => ({
+      State: pr.state,
+      Title: `${htmlOutput ? `<a href="https://github.com/${pr.repository.nameWithOwner}/pull/${pr.number}">` : ''}${shorten(pr.title, shortenChars)}${htmlOutput ? '</a>' : ''}`,
+      Created: new Date(pr.createdAt).toLocaleDateString(),
+      Merged: pr.mergedAt ? new Date(pr.mergedAt).toLocaleDateString() : '-',
+      'Comments/Reviews': `${pr.comments.totalCount}/${pr.reviews.totalCount}`,
+      Changes: `+${pr.additions}/-${pr.deletions}`,
+      PR: `https://github.com/${pr.repository.nameWithOwner}/pull/${pr.number}`,
+    }))
   )
 
-  console.log('\n## Issues')
-  console.table(
-    issues
-      .map((issue) => ({
-        Title: shorten(issue.title, 50),
-        Created: new Date(issue.createdAt).toLocaleDateString(),
-        Closed: issue.closedAt ? new Date(issue.closedAt).toLocaleDateString() : '-',
-        Comments: issue.comments.totalCount,
-        Issue: `https://github.com/${issue.repository.nameWithOwner}/issues/${issue.number}`,
-      }))
-      .reduce((acc, issue) => {
-        acc[issue.Issue] = issue
-        return acc
-      }, {}),
-    ['Created', 'Title', 'Closed', 'Comments']
+  heading('Issues')
+  table(
+    ['Created', 'Title', 'Closed', 'Comments'].concat(htmlOutput ? [] : ['Issue']),
+    issues.map((issue) => ({
+      Title: `${htmlOutput ? `<a href="https://github.com/${issue.repository.nameWithOwner}/issues/${issue.number}">` : ''}${shorten(issue.title, shortenChars)}${htmlOutput ? '</a>' : ''}`,
+      Created: new Date(issue.createdAt).toLocaleDateString(),
+      Closed: issue.closedAt ? new Date(issue.closedAt).toLocaleDateString() : '-',
+      Comments: issue.comments.totalCount,
+      Issue: `https://github.com/${issue.repository.nameWithOwner}/issues/${issue.number}`,
+    }))
   )
 
-  console.log("\n## Reviews")
-  console.table(
+  heading('Reviews')
+  table(
+    ['Date', 'State', 'Title', 'Author', 'Comments'].concat(htmlOutput ? [] : ['PR']),
     reviews
       .filter((review) => review.pullRequest.author.login !== process.argv[2])
       .map((review) => ({
         Date: new Date(review.createdAt).toLocaleDateString(),
         State: review.state,
-        Title: shorten(review.pullRequest.title, 50),
+        Title: shorten(review.pullRequest.title, shortenChars),
+        Title: `${htmlOutput ? `<a href="https://github.com/${review.repository.nameWithOwner}/pull/${review.pullRequest.number}">` : ''}${shorten(review.pullRequest.title, shortenChars)}${htmlOutput ? '</a>' : ''}`,
         Author: review.pullRequest.author.login,
         Comments: review.comments.totalCount,
         PR: `https://github.com/${review.repository.nameWithOwner}/pull/${review.pullRequest.number}`,
       }))
-      .reduce((acc, review) => {
-        acc[review.PR] = review
-        return acc
-      }, {}),
-    ['Date', 'State', 'Title', 'Author']
   )
 
-  console.log('\n## Commits by Repository')
-  console.table(
+  heading('Commits by Repository')
+  table(
+    ['Repository', 'Commits'],
     commitsByRepo.map(({ repository, contributions }) => ({
       Repository: repository.nameWithOwner,
       Commits: contributions.totalCount,
@@ -226,9 +239,10 @@ function printActivity(activity) {
 async function main() {
   const login = process.argv[2]
   const dateStr = process.argv[3]
+  const htmlOutput = process.argv.includes('--html')
 
   if (!login || !dateStr) {
-    console.error('Usage: node activity.js <github-username> <YYYY-MM-DD>')
+    console.error('Usage: node activity.js <github-username> <YYYY-MM-DD> [--html]')
     process.exit(1)
   }
 
@@ -245,8 +259,12 @@ async function main() {
   }
 
   const activity = await fetchUserActivity(login, since)
-  console.log(`# Activity for @${login} since ${since.toLocaleDateString()}`)
-  printActivity(activity)
+  if (htmlOutput) {
+    console.log(`<h2>Activity for @${login} since ${since.toLocaleDateString()}</h2>`)
+  } else {
+    console.log(`# Activity for @${login} since ${since.toLocaleDateString()}`)
+  }
+  printActivity(activity, htmlOutput)
 }
 
 main().catch((error) => {
