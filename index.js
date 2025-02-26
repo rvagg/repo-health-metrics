@@ -2,7 +2,7 @@
 const repoSpec = {
   org: 'filecoin-project',
   repo: 'lotus',
-  maintainerTeamSlug: 'lotus-maintainers', // maintainer team for "official" interactions
+  maintainerTeamSlug: 'lotus-maintainers' // maintainer team for "official" interactions
 }
 
 // Time period to analyze
@@ -92,7 +92,7 @@ query ($cursor: String) {
 `
 
 // Fetch maintainers from GitHub team
-async function fetchMaintainers() {
+async function fetchMaintainers () {
   const response = await fetch(
     `https://api.github.com/orgs/${repoSpec.org}/teams/${repoSpec.maintainerTeamSlug}/members`,
     {
@@ -100,8 +100,8 @@ async function fetchMaintainers() {
       headers: {
         Authorization: `Bearer ${GITHUB_TOKEN}`,
         Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
     }
   )
 
@@ -114,7 +114,7 @@ async function fetchMaintainers() {
 }
 
 // Fetch PR data from GitHub GraphQL API
-async function fetchPRData() {
+async function fetchPRData () {
   let pullRequests = []
   let hasNextPage = true
   let cursor = null
@@ -126,12 +126,12 @@ async function fetchPRData() {
         'User-Agent': 'repo-health-metrics',
         Authorization: `Bearer ${GITHUB_TOKEN}`,
         Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': '2022-11-28'
       },
       body: JSON.stringify({
         query: graphqlPullRequestQuery,
-        variables: { cursor },
-      }),
+        variables: { cursor }
+      })
     })
 
     if (response.status !== 200) {
@@ -163,12 +163,12 @@ async function fetchPRData() {
 }
 
 // Helper function to convert milliseconds to hours and round to the nearest integer
-function convertToRoundedHours(milliseconds) {
+function convertToRoundedHours (milliseconds) {
   return Math.round(milliseconds / (1000 * 60 * 60))
 }
 
 // Calculate response times for PRs
-function calculateResponseTimes(pullRequests, maintainers) {
+function calculateResponseTimes (pullRequests, maintainers) {
   return pullRequests.map((pr) => {
     const prCreatedAt = new Date(pr.createdAt)
     const creator = pr.author.login
@@ -221,13 +221,13 @@ function calculateResponseTimes(pullRequests, maintainers) {
         : null,
       nonAuthorResponseHours: nonAuthorEvent
         ? convertToRoundedHours(new Date(nonAuthorEvent.createdAt) - prCreatedAt)
-        : null,
+        : null
     }
   })
 }
 
 // Main function to orchestrate fetching and processing data
-async function main() {
+async function main () {
   const maintainers = await fetchMaintainers()
   const pullRequests = await fetchPRData()
   const responseTimes = calculateResponseTimes(pullRequests, maintainers)
